@@ -12,6 +12,8 @@ g = os.walk(r"data3")
 total_cpus = multiprocessing.cpu_count() - 2
 for path, dir_list, file_list in g:
     for file_name in file_list:
+        if file_name.split('.')[1] != 'pkl':
+            continue
         data = pickle.load(open(os.path.join(path, file_name), 'rb'))
         dists_mmapped = np.memmap('data4/' + file_name.split('.')[0] + '.MemMap', dtype='float64', shape=(data.shape[0], 2, 1000), mode='w+')
         Parallel(n_jobs=total_cpus, verbose=3)(delayed(fn_distcalc_3D.dnns_v3)(data, data, dists_mmapped, i) for i in range(data.shape[0]))
