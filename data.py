@@ -2,22 +2,105 @@ import os
 import numpy as np
 import pandas as pd
 import pickle
+from math import floor
 from joblib import Parallel, delayed
 import FuncDistCalcs_3D as fn_distcalc_3D
 import multiprocessing
+import FuncNormalizeInput as fn_normalize
 
 
-## 得到最近邻
-g = os.walk(r"data3")
-total_cpus = multiprocessing.cpu_count() - 2
+## 训练集与测试集
+f = open('train_data_2.pkl', 'wb')
+pickle.dump(['x_train','x_val','y_train','y_val'], f)
+x_train = []
+y_train = []
+x_val = []
+y_val = []
+g = os.walk(r"data_1000_norm")
 for path, dir_list, file_list in g:
     for file_name in file_list:
-        if file_name.split('.')[1] != 'pkl':
+        if file_name.split('.')[1] != 'MemMap':
             continue
-        data = pickle.load(open(os.path.join(path, file_name), 'rb'))
-        dists_mmapped = np.memmap('data4/' + file_name.split('.')[0] + '.MemMap', dtype='float64', shape=(data.shape[0], 2, 1000), mode='w+')
-        Parallel(n_jobs=total_cpus, verbose=3)(delayed(fn_distcalc_3D.dnns_v3)(data, data, dists_mmapped, i) for i in range(data.shape[0]))
-        del dists_mmapped
+        data = np.memmap(os.path.join(path, file_name), dtype='float64', mode='r')
+        data = data.reshape(data.shape[0]//2000, 2, 1000)
+        a = np.array(pd.read_table('data2/' + file_name.split('.')[0] + '.txt', header=None))[:,4] != 0
+        tmp = np.random.permutation(data[a])
+        print(floor(tmp.shape[0]*0.5), end='\t')
+        x_train.append(tmp[:floor(tmp.shape[0]*0.4)])
+        x_val.append(tmp[-floor(tmp.shape[0]*0.1):])
+        y_train += [1 for _ in range(x_train[-1].shape[0])]
+        y_val += [1 for _ in range(x_val[-1].shape[0])]
+        print(x_train[-1].shape, x_val[-1].shape)
+
+        tmp = np.random.permutation(data[a == False])
+        print(tmp.shape)
+        print(x_train[-1].shape[0], end='\t')
+        x_train.append(tmp[:x_train[-1].shape[0] * 3])
+        x_val.append(tmp[-x_val[-1].shape[0] * 3:])
+        y_train += [0 for _ in range(x_train[-1].shape[0])]
+        y_val += [0 for _ in range(x_val[-1].shape[0])]
+        print(x_train[-1].shape, x_val[-1].shape)
+
+x_t = np.memmap('x_t', dtype='float64', shape=(len(y_train),2,1000,1), mode='w+')
+x_v = np.memmap('x_v', dtype='float64', shape=(len(y_val),2,1000,1), mode='w+')
+idx = 0
+for i in x_train:
+    x_t[idx:idx + i.shape[0],:,:,0] = i 
+    idx += i.shape[0]
+pickle.dump(x_t, f)
+idx = 0
+for i in x_val:
+    x_v[idx:idx + i.shape[0],:,:,0] = i 
+    idx += i.shape[0]
+pickle.dump(x_v, f)
+pickle.dump(np.array(y_train).reshape(len(y_train),1), f)
+pickle.dump(np.array(y_val).reshape(len(y_val),1), f)
+
+
+
+
+
+# ## 继续修改
+# g = os.walk(r"data_1000")
+# for path, dir_list, file_list in g:
+#     for file_name in file_list:
+#         if file_name.split('.')[1] != 'MemMap':
+#             continue
+#         data = np.memmap(os.path.join(path, file_name), dtype='float64', mode='r')
+#         data = data.reshape(data.shape[0]//2000, 2, 1000)
+#         # dists_mmapped = np.memmap('data_100_norm/' + file_name, dtype='float64', shape=(data.shape[0], 2, 100, 1), mode='w+')
+#         # dists_mmapped[:,0,:,:] = fn_normalize.normalize_dists(data[:, 0,:100], data.shape[0], 'Norm-Self')
+#         # dists_mmapped[:,1,:,:] = fn_normalize.normalize_dists(data[:, 1,:100], data.shape[0], 'Norm-Self')
+#         dists_mmapped = np.memmap('data_1000_norm/' + file_name, dtype='float64', shape=(data.shape[0], 2, 1000, 1), mode='w+')
+#         dists_mmapped[:,0,:,:] = fn_normalize.normalize_dists(data[:, 0,:], data.shape[0], 'Norm-Self')
+#         dists_mmapped[:,1,:,:] = fn_normalize.normalize_dists(data[:, 1,:], data.shape[0], 'Norm-Self')
+#         del dists_mmapped
+
+
+# ## 修改为神经网络可以接受的输入
+# g = os.walk(r"data3")
+# total_cpus = multiprocessing.cpu_count() - 2
+# for path, dir_list, file_list in g:
+#     for file_name in file_list:
+#         if file_name.split('.')[1] != 'pkl':
+#             continue
+#         data = pickle.load(open(os.path.join(path, file_name), 'rb'))
+#         dists_mmapped = np.memmap('data4/' + file_name.split('.')[0] + '.MemMap', dtype='float64', shape=(data.shape[0], 2, 1000), mode='w+')
+#         Parallel(n_jobs=total_cpus, verbose=3)(delayed(fn_distcalc_3D.dnns_v3)(data, data, dists_mmapped, i) for i in range(data.shape[0]))
+#         del dists_mmapped
+
+
+# ## 得到最近邻
+# g = os.walk(r"data3")
+# total_cpus = multiprocessing.cpu_count() - 2
+# for path, dir_list, file_list in g:
+#     for file_name in file_list:
+#         if file_name.split('.')[1] != 'pkl':
+#             continue
+#         data = pickle.load(open(os.path.join(path, file_name), 'rb'))
+#         dists_mmapped = np.memmap('data4/' + file_name.split('.')[0] + '.MemMap', dtype='float64', shape=(data.shape[0], 2, 1000), mode='w+')
+#         Parallel(n_jobs=total_cpus, verbose=3)(delayed(fn_distcalc_3D.dnns_v3)(data, data, dists_mmapped, i) for i in range(data.shape[0]))
+#         del dists_mmapped
 
 
 ## 统计数据
